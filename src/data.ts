@@ -1,3 +1,4 @@
+import { cachedPlayerRequest, playerCacheKey } from './playerCache'
 export interface Player { account_id?: number; personaname?: string; avatarfull?: string; profileurl?: string; rank_tier?: number; profile?: Player }
 export interface HeroStat { hero_id: number; games: number; win: number; last_played?: number }
 export interface RecentMatch { match_id: number; hero_id: number; game_mode?: number; start_time: number; duration: number; kills: number; deaths: number; assists: number; player_slot: number; radiant_win: boolean }
@@ -8,22 +9,41 @@ export interface Teamfight { start: number; end: number; radiant_gold_delta?: nu
 export interface Match { match_id: number; radiant_win: boolean; radiant_score: number; dire_score: number; start_time: number; duration: number; game_mode?: number; version?: number; players: MatchPlayer[]; objectives?: Objective[]; teamfights?: Teamfight[]; radiant_gold_adv?: number[]; radiant_xp_adv?: number[]; chat?: { time: number; type: string; key?: string; slot?: number }[]; replay_url?: string; picks_bans?: { is_pick: boolean; hero_id: number; team: number; order: number }[] }
 export interface Event { id: string; time: number; type: 'fight' | 'objective' | 'kill' | 'item' | 'system'; title: string; detail: string; side?: 'radiant' | 'dire'; playerSlot?: number; itemKey?: string; impact?: number }
 
-const api = async <T>(url: string): Promise<T> => { const r = await fetch(`/api/opendota/${url}`); const data = await r.json(); if (!r.ok) throw Error(data.error || '请求失败'); return data }
-export const getPlayer = async (id: string) => {
+const OPEN_DOTA_API = 'https://api.opendota.com/api'
+const api = async <T>(url: string): Promise<T> => {
+  let response: Response
+  try {
+    response = await fetch(`${OPEN_DOTA_API}/${url}`)
+  } catch {
+    response = await fetch(`/api/opendota/${url}`)
+  }
+  const data = await response.json().catch(() => ({})) as Record<string, any>
+  if (!response.ok) {
+    if (response.status === 404) throw Error(url.startsWith('matches/') ? 'OpenDota 尚未收录这场比赛' : '找不到对应的玩家数据')
+    throw Error(typeof data?.error === 'string' ? data.error : '获取 OpenDota 数据失败，请稍后重试')
+  }
+  return data as T
+}
+export const getPlayer = (id: string) => cachedPlayerRequest(playerCacheKey('profile', id), async () => {
   const [player, wl] = await Promise.all([
-    api<{ profile?: Player }>(`player/${id}`),
-    api<{ win: number; lose: number }>(`wl/${id}`)
+    api<{ profile?: Player }>(`players/${id}`),
+    api<{ win: number; lose: number }>(`players/${id}/wl`)
   ])
   return { ...player, ...wl }
+})
+export const getHeroes = (id: string, mode?: string) => cachedPlayerRequest(playerCacheKey('heroes', id, mode || ''), () => api<HeroStat[]>(`players/${id}/heroes${mode ? `?game_mode=${mode}` : ''}`))
+export const getMatches = (id: string, opts: { limit?: number; offset?: number; game_mode?: string; hero_id?: string; win?: string } = {}) => {
+  const query = new URLSearchParams(Object.entries(opts).filter(([, v]) => v !== undefined && v !== '').map(([k, v]) => [k, String(v)])).toString()
+  return cachedPlayerRequest(playerCacheKey('matches', id, query), () => api<RecentMatch[]>(`players/${id}/matches?${query}`))
 }
-export const getHeroes = (id: string, mode?: string) => api<HeroStat[]>(`heroes/${id}${mode ? `?game_mode=${mode}` : ''}`)
-export const getMatches = (id: string, opts: { limit?: number; offset?: number; game_mode?: string; hero_id?: string; win?: string } = {}) => api<RecentMatch[]>(`matches/${id}?${new URLSearchParams(Object.entries(opts).filter(([, v]) => v !== undefined && v !== '').map(([k, v]) => [k, String(v)]))}`)
-export const getMatch = (id: string) => api<Match>(`match/${id}`)
+export const getMatch = (id: string) => api<Match>(`matches/${id}`)
 export async function requestMatchParse(id: string): Promise<void> {
   const response = await fetch(`/api/opendota/request/${encodeURIComponent(id)}`, { method: 'POST' })
   if (!response.ok) {
-    const body = await response.json().catch(() => ({}))
-    throw new Error(typeof body?.error === 'string' ? body.error : '提交解析请求失败，请稍后重试')
+    const body = await response.json().catch(() => ({})) as Record<string, any>
+    const message = typeof body?.error === 'string' ? body.error : '提交解析请求失败，请稍后重试'
+    console.error('[opendota-request] browser request failed', { matchId: id, status: response.status, message })
+    throw new Error(message)
   }
 }
 export const heroImage = (id: number) => `https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/${heroNames[id]?.internal || 'npc_dota_hero_axe'}.png`

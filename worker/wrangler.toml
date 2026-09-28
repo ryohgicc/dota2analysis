@@ -1,0 +1,13 @@
+name = "dota2analysis-ai-worker"
+main = "index.ts"
+compatibility_date = "2026-09-28"
+
+[[workflows]]
+name = "dota2analysis-ai-review"
+binding = "AI_REVIEW"
+class_name = "AiReviewWorkflow"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "dota2analysis"
+database_id = "5b64d6ab-c43d-4dbb-bbb3-677d2131d113"

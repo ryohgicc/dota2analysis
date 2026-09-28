@@ -1,0 +1,13 @@
+name = "dota2analysis"
+compatibility_date = "2026-09-28"
+pages_build_output_dir = "dist"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "dota2analysis"
+database_id = "5b64d6ab-c43d-4dbb-bbb3-677d2131d113"
+migrations_dir = "migrations"
+
+[[services]]
+binding = "WORKFLOW_SERVICE"
+service = "dota2analysis-ai-worker"

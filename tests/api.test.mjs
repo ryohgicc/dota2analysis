@@ -35,6 +35,21 @@ test('serves SPA route after build', async () => {
   assert.match(await r.text(), /Dota 2 比赛复盘/)
 })
 
+test('shares the latest whole-match analysis between requests', async () => {
+  const save = await fetch(`${base}/api/analyses/9018403896`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ scope: 'whole', content: 'shared review', model: 'demo' }) })
+  assert.equal(save.status, 201)
+  const read = await fetch(`${base}/api/analyses/9018403896?scope=whole`)
+  assert.equal(read.status, 200)
+  assert.equal((await read.json()).analysis.content, 'shared review')
+})
+test('shares event analyses by fight index', async () => {
+  const invalid = await fetch(`${base}/api/analyses/9018403896`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ scope: 'event', fightIndex: -1, content: 'x', model: 'demo' }) })
+  assert.equal(invalid.status, 400)
+  const save = await fetch(`${base}/api/analyses/9018403896`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ scope: 'event', fightIndex: 2, content: 'event review', model: 'demo' }) })
+  assert.equal(save.status, 201)
+  const read = await fetch(`${base}/api/analyses/9018403896?scope=event&fightIndex=2`)
+  assert.equal((await read.json()).analysis.content, 'event review')
+})
 test('forwards OpenAI compatible completion and returns generated content', async () => {
   const body = { baseUrl: 'https://api.openai.com/v1', apiKey: 'test-key', model: 'demo', messages: [{ role: 'user', content: 'review this match' }] }
   const r = await fetch(`${base}/api/analyze`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })

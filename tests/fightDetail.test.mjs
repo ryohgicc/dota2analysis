@@ -36,8 +36,8 @@ test('focused AI evidence contains selected fight details while ordinary evidenc
   assert.equal(selected.objectivesWithin3Minutes.length, 1)
   const focused = buildAnalysisEvidence(match, 0)
   assert.equal(focused.focused_fight.participants[0].damage, 1234)
-  assert.deepEqual(focused.teamfights, [])
-  assert.ok(JSON.stringify(focused).length < 45000)
+  assert.equal(focused.teamfights, undefined)
+  assert.ok(JSON.stringify(focused).length <= 12000)
   const whole = buildAnalysisEvidence(match)
   assert.equal(whole.fight_breakdowns[0].participants[0].itemsUsed[0].name, '闪烁匕首')
 })
@@ -50,5 +50,21 @@ test('long parsed match keeps key teamfight details in the whole-match AI reques
   }
   const evidence = buildAnalysisEvidence(large)
   assert.ok(evidence.fight_breakdowns?.length)
-  assert.ok(JSON.stringify(evidence).length <= 37000)
+  assert.ok(JSON.stringify(evidence).length <= 12000)
+})
+
+test('late high-impact fight survives the smaller whole-match packet', () => {
+  const quiet = { ...match.teamfights[0], players: match.teamfights[0].players.map(p => ({ ...p, gold_delta: 0 })) }
+  const late = { ...match.teamfights[0], start: 1800, end: 1840 }
+  const evidence = buildAnalysisEvidence({ ...match, teamfights: [quiet, late] })
+  assert.equal(evidence.fight_breakdowns[0].index, 1)
+  assert.ok(evidence.whole_match_review.fights.some(f => f.time === '30:00'))
+  assert.ok(JSON.stringify(evidence).length <= 12000)
+})
+
+test('very long player labels cannot exceed the AI evidence budget', () => {
+  const oversized = { ...match, players: players.map(p => ({ ...p, personaname: '长'.repeat(3000) })) }
+  const evidence = buildAnalysisEvidence(oversized, 0)
+  assert.equal(evidence.sampling.reduced, true)
+  assert.ok(JSON.stringify(evidence).length <= 12000)
 })

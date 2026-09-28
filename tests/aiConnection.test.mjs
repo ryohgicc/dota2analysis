@@ -30,4 +30,6 @@ test('maps common model errors without exposing upstream response text', async (
   await assert.rejects(testAiConnection(settings, async () => Response.json({ error: '模型服务返回 401：secret upstream payload' }, { status: 502 })), /拒绝授权/)
   await assert.rejects(testAiConnection(settings, async () => Response.json({ error: '模型服务返回 404：secret upstream payload' }, { status: 502 })), /模型接口或模型不存在/)
   await assert.rejects(testAiConnection(settings, async () => Response.json({ error: '模型服务返回 429：secret upstream payload' }, { status: 502 })), /额度不足/)
+  await assert.rejects(testAiConnection(settings, async () => Response.json({ error: '模型服务返回 524' }, { status: 502 })), /响应超时/)
+  await assert.rejects(testAiConnection(settings, async () => new Response('error code: 524', { status: 524 })), /响应超时/)
 })
