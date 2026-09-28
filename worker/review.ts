@@ -27,7 +27,7 @@ export async function runReview(env: Env, payload: Payload, step: WorkflowStep) 
         const previous = notes
         notes = await step.do(`evidence-${index}`, { retries: { limit: 1, delay: '5 seconds' }, timeout: '75 seconds' }, async () => {
           const text = await completion(env, payload, [
-            { role: 'system', content: `结合已有笔记和本段数据，重写不超过 1800 字的累计事实笔记；保留早期关键事实并加入新事实，注明时间、队伍、玩家和数字。不得推断责任或写最终复盘。字段 path 是原始数据位置；事件可能经过抽样。已有笔记：${previous || '无'}` },
+            { role: 'system', content: `结合已有笔记和本段数据，重写不超过 1800 字的累计事实笔记；保留赛果、关键经济转折、最有影响的团战及能对应上的人物和时间，少抄零散数据。仅记录证据明确的事实；团战金钱变化不等于团战前经济差，不得推断责任或写最终复盘。字段 path 是原始数据位置；事件可能经过抽样。已有笔记：${previous || '无'}` },
             { role: 'user', content: `第 ${index + 1}/${payload.chunks.length} 段比赛数据：${payload.chunks[index]}` }
           ])
           await mark('running', index + 1)
@@ -35,7 +35,7 @@ export async function runReview(env: Env, payload: Payload, step: WorkflowStep) 
         })
       }
       const content = await step.do('final-review', { retries: { limit: 1, delay: '5 seconds' }, timeout: '75 seconds' }, () => completion(env, payload, [
-        { role: 'system', content: `${reviewInstructions(payload.language, payload.scope)}根据以下累计事实笔记输出最终复盘，控制在 1200 字以内。笔记是抽样证据，缺少的数据须说明“数据不足”。` },
+        { role: 'system', content: `${reviewInstructions(payload.language, payload.scope)}根据以下累计事实笔记输出最终复盘，直接回答玩家最想知道的“这把怎么输赢的”和“该回看哪两三个节点”。笔记是抽样证据，缺失信息不要补写；仅在影响结论时简短说明。` },
         { role: 'user', content: `${payload.prompt}\n\n比赛累计笔记：\n${notes}` }
       ]))
       if (content.length > 30000) throw Error('模型回复过长')

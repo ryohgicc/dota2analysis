@@ -7,10 +7,19 @@ test('whole match asks for a concrete cause, evidence and conditional player att
   assert.match(prompt, /【对局情况】/)
   assert.match(prompt, /碾压.*均势.*翻盘/)
   assert.match(prompt, /【胜负关键】/)
-  assert.match(prompt, /选手.*阵容.*对线.*团战/)
-  assert.match(prompt, /无法归因到具体玩家|数据不足/)
+  assert.match(prompt, /最多 3 个值得回看的具体片段/)
+  assert.match(prompt, /无需为了凑齐选手、阵容、对线、团战而逐项罗列/)
+  assert.match(prompt, /不要输出【事实】【推断】【信心】标签/)
   assert.match(prompt, /中文名称/)
-  assert.match(prompt, /购买时间不等于装备合成完成/)
+  assert.match(prompt, /购买时间/)
+  assert.match(prompt, /抽样数据只在结尾用一句话提醒/)
+})
+
+test('focused review stays concise and does not force unrelated match categories', () => {
+  const prompt = reviewInstructions('简体中文', 'event')
+  assert.match(prompt, /【节点结论】/)
+  assert.match(prompt, /最多 2 个最值得回看的细节/)
+  assert.match(prompt, /不要重复整场赛果/)
 })
 
 test('splits a model summary from its evidence while preserving plain text fallback', () => {

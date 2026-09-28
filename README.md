@@ -82,6 +82,8 @@ npm run build
 
 ## 变更记录
 
+- AI 复盘改用简短白话输出：先说明对局结果和主要原因，再挑最多三个关键片段；减少数字罗列和重复的事实/信心标签，保留证据不足时的边界说明。已生成的历史分析保持原文，新规则用于之后的生成。
+
 - 正式环境改由 GitHub Actions 从 `main` 部署到原 Pages 项目；beta 从本地工作区发布，使用独立的 Pages、D1 和 Workflow Worker。
 
 - AI 分析移至 Cloudflare Workflow 后台任务；分段处理中关闭页面不影响生成，首页展示任务进度和整场/节点历史，并用加密参数传递模型 API Key。新增 D1 任务表及独立 Worker 部署。
