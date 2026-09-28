@@ -69,7 +69,7 @@ test('Pages AI route bounds upstream time and hides 524 response details', async
   globalThis.fetch = async (url, options) => {
     if (String(url).startsWith('https://cloudflare-dns.com/')) return Response.json({ Status: 0, Answer: [{ type: 1, data: '1.1.1.1' }] })
     assert.equal(options.signal?.aborted, false)
-    assert.equal(options.redirect, 'error')
+    assert.equal(options.redirect, 'manual')
     return new Response('error code: 524, private provider details', { status: 524 })
   }
   try {

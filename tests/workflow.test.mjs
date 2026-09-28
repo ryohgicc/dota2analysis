@@ -27,6 +27,7 @@ test('workflow continues independently of the browser and saves the final review
   globalThis.fetch = async (url, options) => {
     assert.equal(String(url), 'https://api.openai.com/v1/chat/completions')
     assert.equal(options.headers.Authorization, 'Bearer private-key')
+    assert.equal(options.redirect, 'manual')
     calls++
     return Response.json({ choices: [{ message: { content: calls === 3 ? '【对局情况】均势。' : `已整理第 ${calls} 段` } }] })
   }

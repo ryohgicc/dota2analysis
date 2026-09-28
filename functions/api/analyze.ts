@@ -38,7 +38,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   try {
     if (url.protocol !== 'https:' || url.username || url.password || url.port || !validPublicHostname(url.hostname) || !await publicHost(url.hostname)) return Response.json({ error: 'Base URL 必须是可公开访问的 HTTPS 地址' }, { status: 400 })
     const endpoint = new URL(`${url.pathname.replace(/\/$/, '')}/chat/completions`, url.origin)
-    const upstream = await fetch(endpoint, { method: 'POST', headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ model, messages: messages as Message[], temperature: 0.3 }), signal: AbortSignal.timeout(60000), redirect: 'error' })
+    const upstream = await fetch(endpoint, { method: 'POST', headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ model, messages: messages as Message[], temperature: 0.3 }), signal: AbortSignal.timeout(60000), redirect: 'manual' })
     if (!upstream.ok) {
       return Response.json({ error: `模型服务返回 ${upstream.status}` }, { status: 502 })
     }

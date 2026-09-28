@@ -10,7 +10,7 @@ async function completion(env: Env, payload: Payload, messages: { role: 'system'
   const apiKey = await decryptApiKey(payload.encryptedKey, env.AI_JOB_SECRET)
   const endpoint = new URL(`${new URL(payload.baseUrl).pathname.replace(/\/$/, '')}/chat/completions`, payload.baseUrl)
   const response = await fetch(endpoint, { method: 'POST', headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: payload.model, messages, temperature: 0.3 }), signal: AbortSignal.timeout(60000), redirect: 'error' })
+    body: JSON.stringify({ model: payload.model, messages, temperature: 0.3 }), signal: AbortSignal.timeout(60000), redirect: 'manual' })
   if (!response.ok) throw Error(response.status === 524 ? '模型服务响应超时' : `模型服务返回 ${response.status}`)
   const data = await response.json() as { choices?: { message?: { content?: unknown } }[] }
   const text = data.choices?.[0]?.message?.content
