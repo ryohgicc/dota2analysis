@@ -9,10 +9,11 @@
     "start": "node server/index.js",
     "lint": "tsc --noEmit",
     "test": "node --import tsx --test tests/*.test.mjs",
-    "deploy": "npm run build && npm run d1:migrate:remote && npm run deploy:worker && npx wrangler pages deploy dist",
     "d1:migrate:local": "npx wrangler d1 migrations apply dota2analysis --local",
     "d1:migrate:remote": "npx wrangler d1 migrations apply dota2analysis --remote",
-    "deploy:worker": "wrangler deploy --config worker/wrangler.toml"
+    "deploy:worker": "wrangler deploy --config worker/wrangler.toml",
+    "deploy:production": "echo \"Production deploys on GitHub main via Actions; push a reviewed commit to main.\"",
+    "deploy:beta": "node scripts/deploy-beta.mjs"
   },
   "dependencies": {
     "express": "^5.1.0",

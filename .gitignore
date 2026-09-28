@@ -8,3 +8,4 @@ dist/
 *.tsbuildinfo
 
 .wrangler/
+beta/functions/

@@ -11,36 +11,18 @@
 - **AI 分析**：选择整场或特定团战，让模型结合抽取的经济转折、关键团战和关键时段购买记录判断对局是碾压、均势还是翻盘，并从选手、阵容、对线和团战解释胜负关键；设置页可测试当前模型连接。
 - **请求解析**：比赛缺少解析日志或尚未收录时，可一键向 OpenDota 提交比赛 ID 请求解析，等待后刷新查看结果。
 
-## Cloudflare 免费部署
+## 部署环境
 
-Cloudflare Pages 托管 `dist/` 静态页面，Pages Functions 提供 OpenDota 数据、解析请求、AI 任务提交和健康检查。独立的 Cloudflare Workflow Worker 在后台分段处理 AI 复盘；关闭网页后任务继续运行。任务状态与最终共享结果写入 D1，首页的 AI 分析历史显示整场和节点的处理进度及最终结果。关注列表和“我的账号”仍留在每个人的浏览器里。
+- **正式环境**：`dota2analysis.pages.dev`，由 GitHub 仓库 `main` 分支的 Actions 工作流构建、迁移 D1、部署独立 Workflow Worker 与 Pages。正式环境只能由 GitHub 工作流发布；本地命令不会发布正式环境。现有 Cloudflare Pages 项目属于 Direct Upload，平台不支持原地转为原生 Git 连接，因此使用 GitHub Actions 从仓库自动部署并保留现有域名。
+- **beta 环境**：`dota2analysis-beta.pages.dev`，运行本地工作区的代码。执行 `npm run deploy:beta` 前会先运行测试、类型检查和构建，然后迁移 beta D1，部署 beta Worker 与 beta Pages。beta 的数据库、Worker、Workflow 与加密密钥均独立于正式环境；本地未提交的代码也可发布到 beta。
 
-首次部署：
+首次配置需让两套环境分别拥有一致的 Pages/Worker `AI_JOB_SECRET`（每套使用不同的随机 32 字节十六进制值）。密钥通过 Cloudflare 控制台或 Wrangler 的 `secret put` 设置，不写入仓库。Worker 必须先部署，Pages 的 `WORKFLOW_SERVICE` 服务绑定才能指向它。`OPEN_DOTA_API_KEY` 如需使用，也分别为两个 Pages 项目配置。
 
-```bash
-npm ci
-npx wrangler login
-npx wrangler d1 create dota2analysis
-```
+GitHub 自动发布还需要在仓库 Actions Secrets 中设置 `CLOUDFLARE_API_TOKEN` 和 `CLOUDFLARE_ACCOUNT_ID`。Cloudflare API Token 应仅授予该账号部署 Pages、Workers/Workflows 和应用 D1 迁移所需的权限。配置后在 GitHub Actions 手动运行一次 **Deploy production from GitHub**，之后每次推送 `main` 会自动发布。Actions 检出对应提交并将该提交 SHA 附在正式部署上。正式发布前会应用尚未执行的远端迁移；不要在本地用 `wrangler pages deploy` 覆盖正式环境。
 
-将 `wrangler d1 create` 返回的数据库 ID 同时填入 `wrangler.toml` 和 `worker/wrangler.toml` 的 `database_id`。创建 Pages 项目，然后为 Pages 和后台 Worker 配置**相同**的随机 32 字节十六进制密钥（不要提交到仓库）：
+Cloudflare Pages 托管 `dist/` 静态页面，Pages Functions 提供 OpenDota 数据和 AI 任务提交。独立 Workflow Worker 分段完成模型调用，任务与整场/节点最终结果保存在各环境的 D1。`npm run deploy:beta` 需要本机已登录 Cloudflare（`npx wrangler login`）。本地 Express 预览不运行 Cloudflare Workflow。
 
-```bash
-npx wrangler pages project create dota2analysis --production-branch main
-npm run d1:migrate:remote
-npm run deploy:worker
-node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
-npx wrangler pages secret put AI_JOB_SECRET --project-name dota2analysis
-npx wrangler secret put AI_JOB_SECRET --config worker/wrangler.toml
-npx wrangler pages secret put OPEN_DOTA_API_KEY --project-name dota2analysis
-npm run deploy
-```
-
-首次部署先建立 Worker，再设置 Worker 密钥，最后部署 Pages。密钥只生成一次，将输出值分别输入到两条 `secret put` 命令的提示中。`npm run deploy` 先构建和迁移远端 D1，再部署独立 Worker，最后部署 Pages；任务提交依赖 `WORKFLOW_SERVICE` 服务绑定。部署后确认 `/api/health`、比赛页面、任务接口和历史列表，实际提交一场分析，关闭页面再重新打开查看结果。
-
-本地预览前运行 `npm run build` 和 `npm run d1:migrate:local`。本地后台任务需用 Wrangler 同时启动 Worker 和 Pages，并配置本地 `AI_JOB_SECRET`；单独的 Express 预览只提供普通页面与 API，不运行 Cloudflare Workflow。
-
-Cloudflare Pages 的构建输出目录是 `dist`；部署命令会自动构建。模型 API Key 由使用者在页面填写，后台任务提交时以 AES-GCM 加密后存入 Workflow 参数；Pages 和 Worker 使用同一个 `AI_JOB_SECRET` 解密，密钥及模型 API Key 均不可提交仓库。工作流运行期会持有可解密的参数，Cloudflare 免费版完成后的 Workflow 状态保留最多 3 天。对公网开放后应给 AI 转发接口配置限流与访问控制；当前接口验证 HTTPS 和公网 DNS 地址，不提供全局使用额度管理。
+模型 API Key 由使用者填写，后台任务提交时以 AES-GCM 加密后存入 Workflow 参数；Pages 和相应环境的 Worker 使用同一 `AI_JOB_SECRET` 解密。工作流运行期会持有可解密的参数，Cloudflare 免费版完成后的 Workflow 状态最多保留 3 天。公开部署前仍需为 AI 转发接口配置限流与访问控制。
 
 ## 本地运行
 
@@ -99,6 +81,8 @@ npm run build
 ```
 
 ## 变更记录
+
+- 正式环境改由 GitHub Actions 从 `main` 部署到原 Pages 项目；beta 从本地工作区发布，使用独立的 Pages、D1 和 Workflow Worker。
 
 - AI 分析移至 Cloudflare Workflow 后台任务；分段处理中关闭页面不影响生成，首页展示任务进度和整场/节点历史，并用加密参数传递模型 API Key。新增 D1 任务表及独立 Worker 部署。
 
