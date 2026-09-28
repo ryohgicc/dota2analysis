@@ -5,7 +5,7 @@ type Entry = { expires: number; data: unknown }
 const memory = new Map<string, Entry>()
 const pending = new Map<string, Promise<unknown>>()
 
-export function playerCacheKey(kind: 'profile' | 'heroes' | 'matches', id: string, options = '') {
+export function playerCacheKey(kind: 'profile' | 'heroes' | 'matches' | 'teammates', id: string, options = '') {
   return `${kind}:${id}:${options}`
 }
 

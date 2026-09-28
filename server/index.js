@@ -3,11 +3,13 @@ import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { isIP } from 'node:net'
 import dns from 'node:dns/promises'
+import { createTrumpetChecker } from './trumpets.js'
 
 const app = express()
 app.use(express.json({ limit: '180kb' }))
 const cache = new Map()
 const sharedAnalyses = new Map()
+const trumpetChecker = createTrumpetChecker()
 const id = value => /^\d{1,20}$/.test(String(value ?? ''))
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }))
@@ -32,6 +34,11 @@ app.post('/api/analyses/:matchId', (req, res) => {
   const analysis = { match_id: matchId, scope, fight_index: index, content, model, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }
   sharedAnalyses.set(`${matchId}:${scope}:${index}`, analysis)
   return res.status(201).json({ analysis })
+})
+app.post('/api/trumpets', async (req, res) => {
+  const accountIds = Array.isArray(req.body?.accountIds) ? [...new Set(req.body.accountIds.filter(value => /^\d{1,20}$/.test(String(value))).map(String))].slice(0, 10) : []
+  if (!accountIds.length) return res.status(400).json({ error: '没有有效的玩家账号' })
+  try { return res.json({ results: await trumpetChecker(accountIds) }) } catch { return res.status(503).json({ error: '近期表现检测暂时不可用' }) }
 })
 app.post('/api/opendota/request/:id', async (req, res) => {
   const matchId = req.params.id

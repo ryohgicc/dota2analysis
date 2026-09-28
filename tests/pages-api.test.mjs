@@ -78,3 +78,46 @@ test('Pages AI route bounds upstream time and hides 524 response details', async
     assert.deepEqual(await response.json(), { error: '模型服务返回 524' })
   } finally { globalThis.fetch = originalFetch }
 })
+import { onRequestPost as trumpets } from '../functions/api/trumpets.ts'
+
+test('trumpet route checks each account once per UTC day and reuses D1 rows', async () => {
+  const rows = new Map()
+  const calls = []
+  const db = {
+    prepare(sql) {
+      return {
+        bind(...values) {
+          return {
+            async all() {
+              if (!sql.startsWith('SELECT')) return { results: [] }
+              return { results: values.slice(1).flatMap(accountId => { const row = rows.get(accountId); return row ? [row] : [] }) }
+            },
+            async first() {
+              const row = rows.get(values[0])
+              return row || null
+            },
+            async run() {
+              const [accountId, checkedDate, trumpet_count, rules, checked_at] = values
+              rows.set(accountId, { account_id: accountId, trumpet_count, rules, checked_at })
+              return { success: true, meta: { changes: 1 } }
+            }
+          }
+        }
+      }
+    }
+  }
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = async url => {
+    calls.push(String(url))
+    return Response.json(Array.from({ length: 10 }, (_, index) => ({ player_slot: 0, radiant_win: index < 9, kills: 20, deaths: 0, assists: 0 })))
+  }
+  const request = accountIds => ({ request: new Request('https://site.pages.dev/api/trumpets', { method: 'POST', body: JSON.stringify({ accountIds }), headers: { 'content-type': 'application/json' } }), env: { DB: db } })
+  try {
+    const first = await trumpets(request(['101', '102', '103', '104', '105', '106', '107', '108', '109', '110', '111']))
+    assert.equal(first.status, 200)
+    assert.equal(calls.length, 10)
+    const second = await trumpets(request(['101', '102']))
+    assert.equal(second.status, 200)
+    assert.equal(calls.length, 10)
+  } finally { globalThis.fetch = originalFetch }
+})

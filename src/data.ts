@@ -46,6 +46,15 @@ export async function requestMatchParse(id: string): Promise<void> {
     throw new Error(message)
   }
 }
+
+export type TrumpetResult = { account_id: string; trumpet_count: number; rules: string; checked_at: string }
+export const requestTrumpets = async (accountIds: string[]) => {
+  const response = await fetch('/api/trumpets', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ accountIds }) })
+  const data = await response.json().catch(() => ({})) as { results?: TrumpetResult[]; error?: string }
+  if (!response.ok) throw Error(data.error || '近期表现检测失败')
+  return data.results || []
+}
+
 export const heroImage = (id: number) => `https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/${heroNames[id]?.internal || 'npc_dota_hero_axe'}.png`
 import heroData from './heroes.json'
 import { itemName, objectiveName } from './locale'
