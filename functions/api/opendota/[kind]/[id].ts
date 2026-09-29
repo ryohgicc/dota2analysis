@@ -1,4 +1,4 @@
-const kinds: Record<string, string> = { player: 'players', heroes: 'players', wl: 'players', matches: 'players', match: 'matches' }
+const kinds: Record<string, string> = { player: 'players', heroes: 'players', wl: 'players', matches: 'players', peers: 'players', match: 'matches' }
 
 type Env = { OPEN_DOTA_API_KEY?: string }
 export const onRequestGet: PagesFunction<Env> = async ({ params, request, env }) => {
@@ -11,10 +11,13 @@ export const onRequestGet: PagesFunction<Env> = async ({ params, request, env })
   if (env?.OPEN_DOTA_API_KEY) query.set('api_key', env.OPEN_DOTA_API_KEY)
   if (kind === 'matches') {
     query.set('limit', String(Math.min(Math.max(Number(incoming.get('limit')) || 20, 1), 100)))
-    for (const field of ['hero_id', 'game_mode', 'win', 'offset']) {
+    for (const field of ['hero_id', 'game_mode', 'win', 'offset', 'included_account_id']) {
       const value = incoming.get(field)
       if (value !== null && /^\d{1,20}$/.test(value)) query.set(field, value)
     }
+  }
+  if (kind === 'peers') {
+    query.set('limit', String(Math.min(Math.max(Number(incoming.get('limit')) || 50, 1), 100)))
   }
   if (kind === 'heroes') {
     const mode = incoming.get('game_mode')

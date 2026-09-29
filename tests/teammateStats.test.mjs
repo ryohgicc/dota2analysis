@@ -1,47 +1,31 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { summarizeTeammates } from '../src/teammateStats.ts'
+import { summarizePeerTeammates, enemyRules } from '../src/teammateStats.ts'
 
-const recent = (id, radiant = true) => ({ match_id: id, player_slot: radiant ? 0 : 128, radiant_win: radiant })
-const detail = (id, radiant = true, teammates = []) => ({ match_id: id, radiant_win: radiant, players: [
-  { account_id: 10, player_slot: radiant ? 0 : 128 },
-  ...teammates.map(([account_id, player_slot, personaname]) => ({ account_id, player_slot, personaname }))
-] })
+const game = (match_id, won, deaths = 5) => ({ match_id, player_slot: 0, radiant_win: won, deaths })
+const peer = (account_id, with_games, with_win, personaname = '') => ({ account_id, with_games, with_win, personaname })
 
-test('counts only publicly identified teammates in the latest 50, with wins in shared matches', () => {
-  const matches = Array.from({ length: 51 }, (_, i) => recent(i + 1, i !== 2))
-  const details = matches.map((match, i) => detail(match.match_id, i === 0 ? false : match.radiant_win !== false, [
-    [20, i === 2 ? 129 : 1, '队友'],
-    [30, i === 2 ? 1 : 129, '对手'],
-    [0, i === 2 ? 130 : 2, '匿名']
-  ]))
-  const result = summarizeTeammates('10', matches, details)
-  assert.deepEqual(result, [{ accountId: 20, name: '队友', games: 50, wins: 49, winRate: 98, enemyRules: [] }])
+test('peers provide recent 50 game counts and shared win rates without match details', () => {
+  const result = summarizePeerTeammates('10', [peer(20, 49, 25, '队友'), peer(30, 2, 2), peer(0, 30, 25), peer(10, 12, 10)])
+  assert.deepEqual(result, [{ accountId: 20, name: '队友', games: 49, wins: 25, winRate: 51, enemyRules: [] }])
 })
 
-test('requires three shared games, de-duplicates matches and handles Radiant and Dire', () => {
-  const matches = [recent(1), recent(2, false), recent(3, false), recent(4), recent(4)]
-  const details = [
-    detail(1, true, [[20, 1, '甲'], [30, 129, '敌方']]),
-    detail(2, true, [[20, 129, '甲'], [30, 1, '敌方']]),
-    detail(3, true, [[20, 129, '甲'], [30, 1, '敌方']]),
-    detail(4, false, [[30, 1, '敌方'], [20, 129, '甲']])
-  ]
-  assert.deepEqual(summarizeTeammates('10', matches, details), [{ accountId: 20, name: '甲', games: 3, wins: 1, winRate: 33, enemyRules: [] }])
-  assert.deepEqual(summarizeTeammates('10', matches, details.slice(0, 2)), [])
+test('compares the teammate last 20 matches with and without the current player', () => {
+  const recent = Array.from({ length: 20 }, (_, i) => game(i + 1, i >= 3))
+  const shared = recent.slice(0, 3)
+  const result = summarizePeerTeammates('10', [peer(20, 4, 1)], new Map([[20, { recent, shared }]]))
+  assert.deepEqual(result[0].enemyRules, [enemyRules[0]])
+  assert.deepEqual(summarizePeerTeammates('10', [peer(20, 4, 1)], new Map([[20, { recent: shared, shared }]]))[0].enemyRules, [])
 })
 
-
-test('adds enemy reasons from the teammate recent history and shared match details', () => {
-  const recent = [recentMatch(1), recentMatch(2), recentMatch(3)]
-  const details = [
-    { ...detail(1, false, [[20, 1, '甲']]), players: [{ account_id: 10, player_slot: 0 }, { account_id: 20, player_slot: 1, personaname: '甲', deaths: 11 }, { account_id: 30, player_slot: 129 }] },
-    { ...detail(2, false, [[20, 1, '甲']]), players: [{ account_id: 10, player_slot: 0 }, { account_id: 20, player_slot: 1, personaname: '甲', deaths: 11 }, { account_id: 30, player_slot: 129 }] },
-    { ...detail(3, false, [[20, 1, '甲']]), players: [{ account_id: 10, player_slot: 0 }, { account_id: 20, player_slot: 1, personaname: '甲', deaths: 11 }, { account_id: 30, player_slot: 129 }] }
-  ]
-  const teammateHistory = Array.from({ length: 20 }, (_, i) => ({ ...recentMatch(i + 1), player_slot: i < 3 ? 1 : 129, radiant_win: i < 3 ? false : false }))
-  const result = summarizeTeammates('10', recent, details, new Map([[20, teammateHistory]]))
-  assert.equal(result[0].enemyRules.length, 1)
+test('ten shared games are required for death and win rate reasons', () => {
+  const shared = Array.from({ length: 10 }, (_, i) => game(i + 1, i < 2, i < 3 ? 11 : 10))
+  const result = summarizePeerTeammates('10', [peer(20, 10, 2)], new Map([[20, { recent: shared, shared }]]))
+  assert.deepEqual(result[0].enemyRules, [enemyRules[1], enemyRules[2]])
+  const partial = shared.slice(0, 9)
+  assert.deepEqual(summarizePeerTeammates('10', [peer(20, 10, 2)], new Map([[20, { recent: partial, shared: partial }]]))[0].enemyRules, [])
 })
 
-function recentMatch(id) { return recent(id) }
+test('failed history lookups leave the peer visible without unsupported enemy badges', () => {
+  assert.deepEqual(summarizePeerTeammates('10', [peer(20, 5, 2)])[0].enemyRules, [])
+})

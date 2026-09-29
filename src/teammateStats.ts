@@ -1,4 +1,4 @@
-import { getMatch, getMatches, type Match, type RecentMatch } from './data'
+import { getMatches, getPeers, type Peer, type RecentMatch } from './data'
 import { cachedPlayerRequest, playerCacheKey } from './playerCache'
 
 export const enemyRules = [
@@ -8,80 +8,50 @@ export const enemyRules = [
 ] as const
 
 export type Teammate = { accountId: number; name: string; games: number; wins: number; winRate: number; enemyRules: string[] }
-type TeammateBase = { accountId: number; name: string; games: number; wins: number }
 
 const validAccount = (accountId: unknown) => Number.isInteger(accountId) && Number(accountId) > 0 && Number(accountId) <= 4294967295
-const sameSide = (playerSlot: number, currentSlot: number) => (playerSlot < 128) === (currentSlot < 128)
+const won = (game: RecentMatch) => (game.player_slot < 128) === game.radiant_win
 
-function enemyReasons(id: string, teammate: TeammateBase, recent: RecentMatch[], details: Match[], opponentRecent: RecentMatch[], complete = true) {
-  if (!complete) return []
-  const sharedIds = new Set(recent.map(game => game.match_id))
-  const withCurrent = opponentRecent.slice(0, 20).filter(game => sharedIds.has(game.match_id))
-  const withoutCurrent = opponentRecent.slice(0, 20).filter(game => !sharedIds.has(game.match_id))
-  const withWinRate = withCurrent.length ? withCurrent.filter(game => (game.player_slot < 128) === game.radiant_win).length / withCurrent.length : 0
-  const withoutWinRate = withoutCurrent.length ? withoutCurrent.filter(game => (game.player_slot < 128) === game.radiant_win).length / withoutCurrent.length : 0
-  const sharedDetails = details.filter(match => sharedIds.has(match.match_id)).sort((a, b) => b.start_time - a.start_time).slice(0, 10)
-  const sharedGames = sharedDetails.flatMap(match => {
-    const player = match.players.find(candidate => String(candidate.account_id) === String(teammate.accountId))
-    const current = match.players.find(candidate => String(candidate.account_id) === id)
-    return player && current && sameSide(player.player_slot, current.player_slot) ? [{ match, player }] : []
-  })
-  const reasons = [
-    withCurrent.length > 0 && withoutCurrent.length > 0 && withWinRate < withoutWinRate,
-    sharedGames.length >= 10 && sharedGames.filter(game => game.player.deaths > 10).length >= 3,
-    sharedGames.length >= 10 && sharedGames.filter(game => (game.player.player_slot < 128) === game.match.radiant_win).length / sharedGames.length < 0.3
-  ].flatMap((earned, index) => earned ? [enemyRules[index]] : [])
-  return reasons
-}
-
-export function summarizeTeammates(id: string, recent: RecentMatch[], details: Match[], opponentMatches = new Map<number, RecentMatch[]>(), complete = true): Teammate[] {
-  const byMatch = new Map(details.map(match => [match.match_id, match]))
-  const players = new Map<number, TeammateBase>()
-  const seen = new Set<number>()
-  for (const game of recent.slice(0, 50)) {
-    if (seen.has(game.match_id)) continue
-    seen.add(game.match_id)
-    const match = byMatch.get(game.match_id)
-    if (!match?.players?.length) continue
-    const radiant = game.player_slot < 128
-    const won = match.radiant_win === radiant
-    for (const player of match.players) {
-      const accountId = player.account_id
-      if (!validAccount(accountId) || String(accountId) === id || (player.player_slot < 128) !== radiant) continue
-      const numericAccountId = Number(accountId)
-      const current = players.get(numericAccountId) || { accountId: numericAccountId, name: `玩家 ${accountId}`, games: 0, wins: 0 }
-      current.games++
-      if (won) current.wins++
-      if (player.personaname) current.name = player.personaname
-      players.set(numericAccountId, current)
-    }
-  }
-  return [...players.values()].filter(player => player.games >= 3).map(player => {
-    const reasons = enemyReasons(id, player, recent, details, opponentMatches.get(player.accountId) || [], complete)
-    return { ...player, winRate: Math.round(player.wins / player.games * 100), enemyRules: reasons }
+export function summarizePeerTeammates(id: string, peers: Peer[], histories: Map<number, { recent: RecentMatch[]; shared: RecentMatch[] }> = new Map()): Teammate[] {
+  return peers.filter(peer => validAccount(peer.account_id) && String(peer.account_id) !== id && Number(peer.with_games || 0) >= 3).map(peer => {
+    const accountId = Number(peer.account_id)
+    const games = Number(peer.with_games || 0)
+    const wins = Number(peer.with_win || 0)
+    const history = histories.get(accountId)
+    const recent = history?.recent.slice(0, 20) || []
+    const shared = history?.shared || []
+    const sharedIds = new Set(shared.map(game => game.match_id))
+    const withCurrent = recent.filter(game => sharedIds.has(game.match_id))
+    const withoutCurrent = recent.filter(game => !sharedIds.has(game.match_id))
+    const latestShared = shared.slice(0, 10)
+    const reasons = [
+      withCurrent.length > 0 && withoutCurrent.length > 0 && withCurrent.filter(won).length / withCurrent.length < withoutCurrent.filter(won).length / withoutCurrent.length,
+      latestShared.length === 10 && latestShared.filter(game => game.deaths > 10).length >= 3,
+      latestShared.length === 10 && latestShared.filter(won).length / 10 < 0.3
+    ].flatMap((earned, index) => earned ? [enemyRules[index]] : [])
+    return { accountId, name: peer.personaname || `玩家 ${accountId}`, games, wins, winRate: Math.round(wins / games * 100), enemyRules: reasons }
   }).sort((a, b) => b.games - a.games || b.wins - a.wins || a.accountId - b.accountId)
 }
 
-export const teammateCacheKey = (id: string) => playerCacheKey('teammates', id, 'limit=50')
+export const teammateCacheKey = (id: string) => playerCacheKey('teammates', id, 'peers=50')
 
 export const getRecentTeammates = (id: string) => cachedPlayerRequest(teammateCacheKey(id), async () => {
-  const recent = (await getMatches(id, { limit: 50 })).slice(0, 50)
-  const details: Match[] = []
+  const peers = await getPeers(id, 50)
+  const candidates = peers.filter(peer => validAccount(peer.account_id) && String(peer.account_id) !== id && Number(peer.with_games || 0) >= 3)
+  const histories = new Map<number, { recent: RecentMatch[]; shared: RecentMatch[] }>()
+  let missing = 0
   let next = 0
-  await Promise.all(Array.from({ length: Math.min(3, recent.length) }, async () => {
-    while (next < recent.length) {
-      const game = recent[next++]
-      try { details.push(await getMatch(String(game.match_id))) } catch { /* A missing match does not block other teammate data. */ }
+  await Promise.all(Array.from({ length: Math.min(3, candidates.length) }, async () => {
+    while (next < candidates.length) {
+      const accountId = Number(candidates[next++].account_id)
+      try {
+        const [recent, shared] = await Promise.all([
+          getMatches(String(accountId), { limit: 20 }),
+          getMatches(String(accountId), { limit: 20, included_account_id: id })
+        ])
+        histories.set(accountId, { recent, shared })
+      } catch { missing++ }
     }
   }))
-  const baseTeammates = summarizeTeammates(id, recent, details)
-  const opponentMatches = new Map<number, RecentMatch[]>()
-  let nextTeammate = 0
-  await Promise.all(Array.from({ length: Math.min(3, baseTeammates.length) }, async () => {
-    while (nextTeammate < baseTeammates.length) {
-      const teammate = baseTeammates[nextTeammate++]
-      try { opponentMatches.set(teammate.accountId, await getMatches(String(teammate.accountId), { limit: 20 })) } catch { opponentMatches.set(teammate.accountId, []) }
-    }
-  }))
-  return { teammates: summarizeTeammates(id, recent, details, opponentMatches, details.length >= recent.length), games: recent.length, details: details.length, expectedDetails: recent.length }
+  return { teammates: summarizePeerTeammates(id, peers, histories), missing }
 })

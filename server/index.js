@@ -70,16 +70,20 @@ app.post('/api/opendota/request/:id', async (req, res) => {
 
 app.get('/api/opendota/:kind/:id', async (req, res) => {
   const { kind, id: account } = req.params
-  const paths = { player: `players/${account}`, heroes: `players/${account}/heroes`, wl: `players/${account}/wl`, matches: `players/${account}/matches`, match: `matches/${account}` }
+  const paths = { player: `players/${account}`, heroes: `players/${account}/heroes`, wl: `players/${account}/wl`, matches: `players/${account}/matches`, peers: `players/${account}/peers`, match: `matches/${account}` }
   if (!(kind in paths) || !id(account)) return res.status(400).json({ error: '无效的玩家或比赛 ID' })
   const query = new URLSearchParams()
   if (kind === 'matches') {
     const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 100)
     query.set('limit', String(limit))
-    for (const key of ['hero_id', 'game_mode', 'win']) {
+    for (const key of ['hero_id', 'game_mode', 'win', 'included_account_id']) {
       if (req.query[key] !== undefined && id(req.query[key])) query.set(key, String(req.query[key]))
     }
     if (req.query.offset !== undefined && id(req.query.offset)) query.set('offset', String(req.query.offset))
+  }
+  if (kind === 'peers') {
+    const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 100)
+    query.set('limit', String(limit))
   }
   if (kind === 'heroes' && req.query.game_mode !== undefined && id(req.query.game_mode)) query.set('game_mode', String(req.query.game_mode))
   if (process.env.OPEN_DOTA_API_KEY) query.set('api_key', process.env.OPEN_DOTA_API_KEY)

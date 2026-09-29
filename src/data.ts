@@ -32,10 +32,12 @@ export const getPlayer = (id: string) => cachedPlayerRequest(playerCacheKey('pro
   return { ...player, ...wl }
 })
 export const getHeroes = (id: string, mode?: string) => cachedPlayerRequest(playerCacheKey('heroes', id, mode || ''), () => api<HeroStat[]>(`players/${id}/heroes${mode ? `?game_mode=${mode}` : ''}`))
-export const getMatches = (id: string, opts: { limit?: number; offset?: number; game_mode?: string; hero_id?: string; win?: string } = {}) => {
+export const getMatches = (id: string, opts: { limit?: number; offset?: number; game_mode?: string; hero_id?: string; win?: string; included_account_id?: string } = {}) => {
   const query = new URLSearchParams(Object.entries(opts).filter(([, v]) => v !== undefined && v !== '').map(([k, v]) => [k, String(v)])).toString()
   return cachedPlayerRequest(playerCacheKey('matches', id, query), () => api<RecentMatch[]>(`players/${id}/matches?${query}`))
 }
+export type Peer = { account_id: number; personaname?: string; with_games?: number; with_win?: number; against_games?: number; against_win?: number; last_played?: number }
+export const getPeers = (id: string, limit = 50) => cachedPlayerRequest(playerCacheKey('peers', id, `limit=${limit}`), () => api<Peer[]>(`players/${id}/peers?limit=${Math.min(Math.max(limit, 1), 100)}`))
 export const getMatch = (id: string) => api<Match>(`matches/${id}`)
 export async function requestMatchParse(id: string): Promise<void> {
   const response = await fetch(`/api/opendota/request/${encodeURIComponent(id)}`, { method: 'POST' })

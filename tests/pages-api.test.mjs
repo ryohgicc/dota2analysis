@@ -18,6 +18,21 @@ test('Pages OpenDota route rejects invalid IDs and only forwards accepted filter
   } finally { globalThis.fetch = originalFetch }
 })
 
+test('Pages OpenDota route forwards bounded peers and validated included account filters', async () => {
+  const calls = []
+  globalThis.fetch = async url => { calls.push(String(url)); return Response.json([]) }
+  try {
+    assert.equal((await openDota(context('peers', '123', '?limit=50&evil=2'))).status, 200)
+    assert.equal((await openDota(context('matches', '123', '?limit=20&included_account_id=456'))).status, 200)
+    assert.equal((await openDota(context('matches', '123', '?included_account_id=bad'))).status, 200)
+    assert.deepEqual(calls, [
+      'https://api.opendota.com/api/players/123/peers?limit=50',
+      'https://api.opendota.com/api/players/123/matches?limit=20&included_account_id=456',
+      'https://api.opendota.com/api/players/123/matches?limit=20'
+    ])
+  } finally { globalThis.fetch = originalFetch }
+})
+
 test('Pages OpenDota route handles missing matches and upstream errors', async () => {
   globalThis.fetch = async () => Response.json(null)
   try {
