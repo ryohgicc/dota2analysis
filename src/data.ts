@@ -6,7 +6,7 @@ export interface MatchPlayer { account_id?: number; personaname?: string; player
 export interface Objective { time: number; type: string; key?: string; slot?: number; player_slot?: number; team?: number }
 export interface TeamfightPlayer { deaths?: number; damage?: number; healing?: number; gold_delta?: number; xp_delta?: number; ability_uses?: Record<string, number>; item_uses?: Record<string, number>; deaths_pos?: Record<string, Record<string, number>>; buybacks?: number }
 export interface Teamfight { start: number; end: number; radiant_gold_delta?: number; radiant_xp_delta?: number; players?: TeamfightPlayer[] }
-export interface Match { match_id: number; radiant_win: boolean; radiant_score: number; dire_score: number; start_time: number; duration: number; game_mode?: number; version?: number; players: MatchPlayer[]; objectives?: Objective[]; teamfights?: Teamfight[]; radiant_gold_adv?: number[]; radiant_xp_adv?: number[]; chat?: { time: number; type: string; key?: string; slot?: number }[]; replay_url?: string; picks_bans?: { is_pick: boolean; hero_id: number; team: number; order: number }[] }
+export interface Match { match_id: number; radiant_win: boolean; radiant_score: number; dire_score: number; start_time: number; duration: number; game_mode?: number; version?: number; od_data?: { has_parsed?: boolean }; players: MatchPlayer[]; objectives?: Objective[]; teamfights?: Teamfight[]; radiant_gold_adv?: number[]; radiant_xp_adv?: number[]; chat?: { time: number; type: string; key?: string; slot?: number }[]; replay_url?: string; picks_bans?: { is_pick: boolean; hero_id: number; team: number; order: number }[] }
 export interface Event { id: string; time: number; type: 'fight' | 'objective' | 'kill' | 'item' | 'system'; title: string; detail: string; side?: 'radiant' | 'dire'; playerSlot?: number; itemKey?: string; impact?: number }
 
 const OPEN_DOTA_API = 'https://api.opendota.com/api'
@@ -41,7 +41,20 @@ export const getMatches = (id: string, opts: { limit?: number; offset?: number; 
 }
 export type Peer = { account_id: number; personaname?: string; with_games?: number; with_win?: number; against_games?: number; against_win?: number; last_played?: number }
 export const getPeers = (id: string, limit = 50) => cachedPlayerRequest(playerCacheKey('peers', id, `limit=${limit}`), () => api<Peer[]>(`players/${id}/peers?limit=${Math.min(Math.max(limit, 1), 100)}`))
+const parsedMatchCache = new Map<number, boolean>()
 export const getMatch = (id: string) => api<Match>(`matches/${id}`)
+export async function getMatchParsed(matchId: number): Promise<boolean> {
+  const cached = parsedMatchCache.get(matchId)
+  if (cached !== undefined) return cached
+  try {
+    const match = await getMatch(String(matchId))
+    const parsed = match.od_data?.has_parsed === true
+    parsedMatchCache.set(matchId, parsed)
+    return parsed
+  } catch {
+    return false
+  }
+}
 export async function requestMatchParse(id: string): Promise<void> {
   const response = await fetch(`/api/opendota/request/${encodeURIComponent(id)}`, { method: 'POST' })
   if (!response.ok) {

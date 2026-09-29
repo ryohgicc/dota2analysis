@@ -34,9 +34,11 @@ test('bounds long match evidence and labels sampled sections', async () => {
   const evidence = buildAnalysisEvidence(longMatch)
   assert.equal(evidence.sampling.reduced, true)
   assert.equal(evidence.sampling.full_fight_count, 120)
+  assert.equal(evidence.sampling.note.includes('长度超限'), true)
   assert.ok(JSON.stringify(evidence).length <= 12000)
   const ordinary = buildAnalysisEvidence(match)
   assert.equal(ordinary.sampling.full_event_count, 13)
+  assert.equal(ordinary.sampling.reduced, false)
   assert.ok(ordinary.whole_match_review.purchasesByPlayer.some(p => p.events.length))
 })
 

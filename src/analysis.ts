@@ -73,15 +73,17 @@ export function buildAnalysisEvidence(match: Match, focusedFightIndex?: number) 
     events: cap(objectives, focus ? 0 : 12),
     ...(focus ? { focused_fight: compactFight(focus, focusedFightIndex!) } : {}),
     ...(fight ? { fight_breakdowns: [compactFight(fight, strongest!)] } : {}),
-    sampling: { reduced: true, full_event_count: fullEventCount, full_fight_count: review.fights.length }
+    sampling: { reduced: fullEventCount > 100 || review.fights.length > 40, full_event_count: fullEventCount, full_fight_count: review.fights.length, note: '证据包会在长度超限时按优先级缩减；字段缺失不代表事件未发生。' }
   }
   if (length(evidence) <= MAX_EVIDENCE_LENGTH) return evidence
 
+  evidence.sampling.reduced = true
   reviewPacket.fights = reviewPacket.fights.slice(0, 2).map(f => ({ ...f, participants: f.participants.filter(p => p.deaths || Math.abs(p.goldChange) >= 300) }))
   reviewPacket.purchasesByPlayer = reviewPacket.purchasesByPlayer.map(p => ({ ...p, sampled: p.sampled || p.events.length > 2, events: cap(p.events, 2) }))
   evidence.events = []
   if (length(evidence) <= MAX_EVIDENCE_LENGTH) return evidence
 
+  evidence.sampling.reduced = true
   reviewPacket.fights = []
   reviewPacket.purchasesByPlayer = reviewPacket.purchasesByPlayer.map(p => ({ ...p, sampled: true, events: [] }))
   evidence.gold_advantage_per_minute = cap(evidence.gold_advantage_per_minute, 10)
