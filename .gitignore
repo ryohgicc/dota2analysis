@@ -9,3 +9,6 @@ dist/
 
 .wrangler/
 beta/functions/
+
+integrations/wechaty/.state/
+integrations/wechaty/*.memory-card.json
