@@ -11,11 +11,14 @@ export interface Event { id: string; time: number; type: 'fight' | 'objective' |
 
 const OPEN_DOTA_API = 'https://api.opendota.com/api'
 const api = async <T>(url: string): Promise<T> => {
+  const proxyUrl = `/api/opendota/${url.startsWith('matches/') ? `match/${url.slice(8)}` : url.replace(/^players\/(\d+)(?:\/(\w+))?(.*)$/, (_, id, kind, query) => `${kind || 'player'}/${id}${query}`)}`
+  const options = url.startsWith('matches/') ? { cache: 'no-store' as const } : undefined
   let response: Response
   try {
-    response = await fetch(`${OPEN_DOTA_API}/${url}`)
+    response = await fetch(`${OPEN_DOTA_API}/${url}`, options)
+    if (!response.ok && response.status !== 404) response = await fetch(proxyUrl, options)
   } catch {
-    response = await fetch(`/api/opendota/${url}`)
+    response = await fetch(proxyUrl, options)
   }
   const data = await response.json().catch(() => ({})) as Record<string, any>
   if (!response.ok) {

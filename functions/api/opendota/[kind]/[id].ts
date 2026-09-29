@@ -26,9 +26,10 @@ export const onRequestGet: PagesFunction<Env> = async ({ params, request, env })
   try {
     const upstream = await fetch(`https://api.opendota.com/api/${path}${query.size ? `?${query}` : ''}`, {})
     if (!upstream.ok) return Response.json({ error: upstream.status === 404 ? '找不到对应数据' : `OpenDota 暂时不可用 (${upstream.status})` }, { status: upstream.status === 404 ? 404 : 502 })
-    const data = await upstream.json() as { error?: string; players?: unknown[] } | null
+    const data = await upstream.json() as { error?: string; players?: unknown[]; version?: number } | null
     if (kind === 'match' && (!data || !Array.isArray(data.players))) return Response.json({ error: 'OpenDota 尚未收录这场比赛' }, { status: 404 })
     if (data?.error) return Response.json({ error: data.error }, { status: 404 })
-    return Response.json(data, { headers: { 'Cache-Control': `public, max-age=${kind === 'match' ? 300 : 90}` } })
+    const cacheControl = kind === 'match' && !data?.version ? 'no-store' : `public, max-age=${kind === 'match' ? 300 : 90}`
+    return Response.json(data, { headers: { 'Cache-Control': cacheControl } })
   } catch { return Response.json({ error: '获取比赛数据失败，请稍后再试' }, { status: 502 }) }
 }

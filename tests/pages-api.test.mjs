@@ -48,6 +48,20 @@ test('Pages OpenDota route handles missing matches and upstream errors', async (
   } finally { globalThis.fetch = originalFetch }
 })
 
+test('Pages match route does not cache unparsed results', async () => {
+  globalThis.fetch = async () => Response.json({ match_id: 123, players: [], od_data: { has_parsed: false } })
+  try {
+    const response = await openDota(context('match', '123'))
+    assert.equal(response.status, 200)
+    assert.equal(response.headers.get('Cache-Control'), 'no-store')
+  } finally { globalThis.fetch = originalFetch }
+  globalThis.fetch = async () => Response.json({ match_id: 123, version: 22, players: [] })
+  try {
+    const response = await openDota(context('match', '123'))
+    assert.equal(response.headers.get('Cache-Control'), 'public, max-age=300')
+  } finally { globalThis.fetch = originalFetch }
+})
+
 const aiRequest = baseUrl => ({ request: new Request('https://site.pages.dev/api/analyze', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ baseUrl, apiKey: 'secret', model: 'model', messages: [{ role: 'user', content: 'hi' }] }) }), env: {} })
 
 test('Pages AI route rejects local and DNS-resolved private destinations', async () => {

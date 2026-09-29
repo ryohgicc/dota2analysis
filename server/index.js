@@ -96,7 +96,7 @@ app.get('/api/opendota/:kind/:id', async (req, res) => {
     const data = await upstream.json()
     if (kind === 'match' && (!data || !Array.isArray(data.players))) return res.status(404).json({ error: 'OpenDota 尚未收录这场比赛' })
     if (data?.error) return res.status(404).json({ error: data.error })
-    cache.set(url, { data, expires: Date.now() + (kind === 'match' ? 300000 : 90000) })
+    if (kind !== 'match' || data?.version) cache.set(url, { data, expires: Date.now() + (kind === 'match' ? 300000 : 90000) })
     if (cache.size > 200) cache.delete(cache.keys().next().value)
     return res.json(data)
   } catch { return res.status(502).json({ error: '获取比赛数据失败，请稍后再试' }) }
